@@ -473,9 +473,11 @@ bool cache_t::canBeFreed()
 
 void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
 {
+    // 是否需要释放之前的数组
     bool freeOld = canBeFreed();
-
+    // 获取老的数组
     bucket_t *oldBuckets = buckets();
+    // 分配新的数组
     bucket_t *newBuckets = allocateBuckets(newCapacity);
 
     // Cache's old contents are not propagated. 
@@ -485,10 +487,14 @@ void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
     assert(newCapacity > 0);
     assert((uintptr_t)(mask_t)(newCapacity-1) == newCapacity-1);
 
+    // 重新设置数组和mask
     setBucketsAndMask(newBuckets, newCapacity - 1);
-    
+    // 如果需要释放
     if (freeOld) {
+        // 将老的数组存到一个垃圾箱
+        // 这里的释放有一个机制,会将所有需要释放的先存起来,等这个垃圾箱打到一个指定的大小的时候才去释放
         cache_collect_free(oldBuckets, oldCapacity);
+        // 去释放垃圾箱,不需要强制释放.就是等垃圾箱达到一定量才去释放.
         cache_collect(false);
     }
 }
@@ -540,20 +546,21 @@ bucket_t * cache_t::find(cache_key_t k, id receiver)
     cache_t::bad_cache(receiver, (SEL)k, cls);
 }
 
-
+// 扩容
 void cache_t::expand()
 {
     cacheUpdateLock.assertLocked();
-    
+    // 获取之前的数组长度
     uint32_t oldCapacity = capacity();
+    // 将数组扩容两倍.
     uint32_t newCapacity = oldCapacity ? oldCapacity*2 : INIT_CACHE_SIZE;
-
+    
     if ((uint32_t)(mask_t)newCapacity != newCapacity) {
         // mask overflow - can't grow further
         // fixme this wastes one bit of mask
         newCapacity = oldCapacity;
     }
-
+    // 重新分配数组的空间
     reallocate(oldCapacity, newCapacity);
 }
 
@@ -590,8 +597,11 @@ static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver)
     // Scan for the first unused slot and insert there.
     // There is guaranteed to be an empty slot because the 
     // minimum size is 4 and we resized at 3/4 full.
+    // 获取缓存的方法
     bucket_t *bucket = cache->find(key, receiver);
+    // 如果方法名为空,则将已占用数加一.
     if (bucket->key() == 0) cache->incrementOccupied();
+    // 将方法名和方法实现添加到bucket里,这样下次在获取这个bucket时,这个bucket将有值.就等于是缓存进去了.
     bucket->set(key, imp);
 }
 

@@ -57,9 +57,9 @@ public:
 
 
 struct cache_t {
-    struct bucket_t *_buckets;
-    mask_t _mask;
-    mask_t _occupied;
+    struct bucket_t *_buckets; // 方法缓存数组
+    mask_t _mask; // 方法缓存数组的个数减一
+    mask_t _occupied; // 已占用多少
 
 public:
     struct bucket_t *buckets();
@@ -76,9 +76,9 @@ public:
     static size_t bytesForCapacity(uint32_t cap);
     static struct bucket_t * endMarker(struct bucket_t *b, uint32_t cap);
 
-    void expand();
-    void reallocate(mask_t oldCapacity, mask_t newCapacity);
-    struct bucket_t * find(cache_key_t key, id receiver);
+    void expand(); // 扩容方法缓存数组
+    void reallocate(mask_t oldCapacity, mask_t newCapacity); // 重新分配方法缓存数组
+    struct bucket_t * find(cache_key_t key, id receiver); // 获取方法缓存
 
     static void bad_cache(id receiver, SEL sel, Class isa) __attribute__((noreturn));
 };
@@ -1409,6 +1409,7 @@ struct message_ref_t {
 
 extern Method protocol_getMethod(protocol_t *p, SEL sel, bool isRequiredMethod, bool isInstanceMethod, bool recursive);
 
+// 遍历当前类以及所有子类,通过block将遍历到的类传出去.
 static inline void
 foreach_realized_class_and_subclass_2(Class top, unsigned& count,
                                       std::function<bool (Class)> code) 

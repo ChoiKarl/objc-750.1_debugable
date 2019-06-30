@@ -2114,7 +2114,9 @@ static void flushCaches(Class cls)
     mutex_locker_t lock(cacheUpdateLock);
 
     if (cls) {
+        // 遍历自己+所有的子类
         foreach_realized_class_and_subclass(cls, ^(Class c){
+            // c就是当前遍历到的类.
             cache_erase_nolock(c);
         });
     }
@@ -2844,13 +2846,15 @@ static void schedule_class_load(Class cls)
 {
     if (!cls) return;
     assert(cls->isRealized());  // _read_images should realize
-
+    // 判断类是否已经加入到列表
     if (cls->data()->flags & RW_LOADED) return;
 
     // Ensure superclass-first ordering
+    // 递归,先调用父类的
     schedule_class_load(cls->superclass);
-
+    // 加入到列表里
     add_class_to_loadable_list(cls);
+    // 标记为已经加入到列表
     cls->setInfo(RW_LOADED); 
 }
 
@@ -2869,12 +2873,15 @@ void prepare_load_methods(const headerType *mhdr)
 
     runtimeLock.assertLocked();
 
+    // 从mach-o文件中获取需要执行load方法的类
     classref_t *classlist = 
         _getObjc2NonlazyClassList(mhdr, &count);
     for (i = 0; i < count; i++) {
+        // 然后通过 remap 的方式拿到类对象、分类对象的指针，加入链表。
         schedule_class_load(remapClass(classlist[i]));
     }
 
+    // 从mach-o文件中获取需要执行load方法的分类
     category_t **categorylist = _getObjc2NonlazyCategoryList(mhdr, &count);
     for (i = 0; i < count; i++) {
         category_t *cat = categorylist[i];
@@ -3035,7 +3042,7 @@ _method_setImplementation(Class cls, method_t *m, IMP imp)
     // Cache updates are slow if cls is nil (i.e. unknown)
     // RR/AWZ updates are slow if cls is nil (i.e. unknown)
     // fixme build list of classes whose Methods are known externally?
-
+    // 重置当前类以及所有子类的方法缓存
     flushCaches(cls);
 
     updateCustomRR_AWZ(cls, m);
@@ -4214,10 +4221,12 @@ objc_class::getLoadMethod()
     assert(!isMetaClass());
     assert(ISA()->isMetaClass());
 
+    // 获取当前类的方法列表
     mlist = ISA()->data()->ro->baseMethods();
     if (mlist) {
         for (const auto& meth : *mlist) {
             const char *name = sel_cname(meth.name);
+            // 遍历找到load方法
             if (0 == strcmp(name, "load")) {
                 return meth.imp;
             }
@@ -4668,7 +4677,7 @@ static method_t *findMethodInSortedMethodList(SEL key, const method_list_t *list
     const method_t *probe;
     uintptr_t keyValue = (uintptr_t)key;
     uint32_t count;
-    
+    // 二分查找
     for (count = list->count; count != 0; count >>= 1) {
         probe = base + (count >> 1);
         
@@ -4902,22 +4911,28 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     runtimeLock.assertLocked();
 
     // Try this class's cache.
-
+    // 尝试获取缓存
     imp = cache_getImp(cls, sel);
+    // 如果有缓存,就直接跳到done
     if (imp) goto done;
 
     // Try this class's method lists.
     {
+        // 没有找到缓存,尝试从自己遍历当前类的方法列表去找方法
         Method meth = getMethodNoSuper_nolock(cls, sel);
         if (meth) {
+            // 找到方法,就去填充到缓存里
             log_and_fill_cache(cls, meth->imp, sel, inst, cls);
+            // 给imp赋值
             imp = meth->imp;
+            // 跳转到done
             goto done;
         }
     }
 
     // Try superclass caches and method lists.
     {
+        // 当前类没有找到,就从父类往上遍历查找
         unsigned attempts = unreasonableClassCount();
         for (Class curClass = cls->superclass;
              curClass != nil;
@@ -4929,14 +4944,19 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
             }
             
             // Superclass cache.
+            // 获取父类的缓存
             imp = cache_getImp(curClass, sel);
+            // 找到父类的缓存
             if (imp) {
+                // 这个缓存不是消息转发的
                 if (imp != (IMP)_objc_msgForward_impcache) {
                     // Found the method in a superclass. Cache it in this class.
+                    // 就缓存到当前类里面
                     log_and_fill_cache(cls, imp, sel, inst, curClass);
+                    // 跳转到done
                     goto done;
                 }
-                else {
+                else { // 如果找到的这个方法实现是消息转发的,就停止遍历,但是不去缓存.
                     // Found a forward:: entry in a superclass.
                     // Stop searching, but don't cache yet; call method 
                     // resolver for this class first.
@@ -4945,8 +4965,10 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
             }
             
             // Superclass method list.
+            // 父类缓存里也没有找到,就去父类的消息列表里去找
             Method meth = getMethodNoSuper_nolock(curClass, sel);
             if (meth) {
+                // 找到了,就缓存到当前类.
                 log_and_fill_cache(cls, meth->imp, sel, inst, curClass);
                 imp = meth->imp;
                 goto done;
@@ -4955,20 +4977,24 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     }
 
     // No implementation found. Try method resolver once.
-
+    // 尝试调用当前类的动态添加方法机制
+    // 如果需要执行resolver,并且没有去尝试过resolver
     if (resolver  &&  !triedResolver) {
         runtimeLock.unlock();
+        // 调用当前类的resolver
+        // 如果在resolver的时候给sel动态添加了方法,goto retry的时候会重新走一遍方法的查找流程,这个时候就能找到方法的实现.
         _class_resolveMethod(cls, sel, inst);
         runtimeLock.lock();
         // Don't cache the result; we don't hold the lock so it may have 
         // changed already. Re-do the search from scratch instead.
+        // 标记为已经尝试过去resolver
         triedResolver = YES;
         goto retry;
     }
 
     // No implementation found, and method resolver didn't help. 
     // Use forwarding.
-
+    
     imp = (IMP)_objc_msgForward_impcache;
     cache_fill(cls, sel, imp, inst);
 

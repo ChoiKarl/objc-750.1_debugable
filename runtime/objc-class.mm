@@ -617,29 +617,35 @@ static void _class_resolveClassMethod(Class cls, SEL sel, id inst)
 **********************************************************************/
 static void _class_resolveInstanceMethod(Class cls, SEL sel, id inst)
 {
+    // 是否实现resolve,会从当前类一直往上找.
     if (! lookUpImpOrNil(cls->ISA(), SEL_resolveInstanceMethod, cls, 
                          NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) 
     {
+        // 没有实现,就直接返回
         // Resolver not implemented.
         return;
     }
-
+    
+    
     BOOL (*msg)(Class, SEL, SEL) = (typeof(msg))objc_msgSend;
+    // 调用resolveInstanceMethod方法,将当前需要动态实现的方法当参数传进去.
+    // resolved: resolveInstanceMethod的返回值
     bool resolved = msg(cls, SEL_resolveInstanceMethod, sel);
 
     // Cache the result (good or bad) so the resolver doesn't fire next time.
     // +resolveInstanceMethod adds to self a.k.a. cls
+    // 获取sel方法的实现地址, 如果在resolveInstanceMethod里面给sel动态添加了一个方法实现的话,这里的imp将会有值.
     IMP imp = lookUpImpOrNil(cls, sel, inst, 
                              NO/*initialize*/, YES/*cache*/, NO/*resolver*/);
-
+    // 判断resolveInstanceMethod方法的返回值,
     if (resolved  &&  PrintResolving) {
-        if (imp) {
+        if (imp) { // 如果在resolveInstanceMethod方法里面给sel动态添加了实现
             _objc_inform("RESOLVE: method %c[%s %s] "
                          "dynamically resolved to %p", 
                          cls->isMetaClass() ? '+' : '-', 
                          cls->nameForLogging(), sel_getName(sel), imp);
         }
-        else {
+        else { // 没有动态添加实现
             // Method resolver didn't add anything?
             _objc_inform("RESOLVE: +[%s resolveInstanceMethod:%s] returned YES"
                          ", but no new implementation of %c[%s %s] was found",
@@ -659,13 +665,16 @@ static void _class_resolveInstanceMethod(Class cls, SEL sel, id inst)
 **********************************************************************/
 void _class_resolveMethod(Class cls, SEL sel, id inst)
 {
+    // 不是元类
     if (! cls->isMetaClass()) {
         // try [cls resolveInstanceMethod:sel]
+        // 调用动态添加对象方法
         _class_resolveInstanceMethod(cls, sel, inst);
     } 
-    else {
+    else { // 是元类
         // try [nonMetaClass resolveClassMethod:sel]
         // and [cls resolveInstanceMethod:sel]
+        // 调用动态添加类方法
         _class_resolveClassMethod(cls, sel, inst);
         if (!lookUpImpOrNil(cls, sel, inst, 
                             NO/*initialize*/, YES/*cache*/, NO/*resolver*/)) 

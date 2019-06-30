@@ -9,34 +9,57 @@
 #import <objc/runtime.h>
 #include <map>
 #include <string>
+#import "KLSubTest.h"
+#import "KLPerson.h"
+
 using namespace std;
 
-union isa {
-    isa() { }
-    isa(uintptr_t value) : bits(value) { }
-    
-    Class cls;
-    uintptr_t bits;
-    struct {
-        uintptr_t nonpointer        : 1;
-        uintptr_t has_assoc         : 1;
-        uintptr_t has_cxx_dtor      : 1;
-        uintptr_t shiftcls          : 44; /*MACH_VM_MAX_ADDRESS 0x7fffffe00000*/
-        uintptr_t magic             : 6;
-        uintptr_t weakly_referenced : 1;
-        uintptr_t deallocating      : 1;
-        uintptr_t has_sidetable_rc  : 1;
-        uintptr_t extra_rc          : 8;
-    };
-};
+typedef void(*load_method_t)(id, SEL);
 
+struct KLTest_struct {
+    int a;
+    int b;
+    
+    KLTest_struct(int _a, int _b): a(_a), b(_b) {
+        
+    }
+    
+    
+};
+void listTest();
 
 int main(int argc, const char * argv[]) {
     
-    NSObject *o = [[NSObject alloc] init];
-    objc_setAssociatedObject(o, "key", @"hahahah", OBJC_ASSOCIATION_COPY_NONATOMIC);
-    objc_getAssociatedObject(o, "key");
+    KLPerson *p = [[KLPerson alloc] init];
+    [p test:1 s:@"kl" n:@18.2];
+    NSLog(@"---------------");
+    
     return 0;
+}
+
+
+void listTest() {
+    NSLog(@"%s",__func__);
+    return;
+    KLTest_struct *kt = nil;
+    
+    kt = (struct KLTest_struct *)
+    realloc(kt,
+            1 *
+            sizeof(struct KLTest_struct));
+    
+    double d = 66.666;
+    
+    KLTest_struct k1(11, 21);
+    KLTest_struct k2(12, 22);
+    
+    kt[0] = k1;
+    kt[1] = k2;
+    
+    
+    NSLog(@"%d--%d", kt[0].a, kt[0].b);
+    NSLog(@"%d--%d", kt[1].a, kt[1].b);
+    NSLog(@"%f", d);
 }
 
 void mapTest() {

@@ -29,6 +29,8 @@
 
 // Look for a __DATA or __DATA_CONST or __DATA_DIRTY section 
 // with the given name that stores an array of T.
+// 从 Mach-O 文件的 __DATA 章节中的 __objc_nlclslist 和 __objc_nlcatlist 段中分别获取到指向类描述结构体、分类描述结构体地址的指针
+// https://juejin.im/post/5c0bb2e8e51d4529ee233fee
 template <typename T>
 T* getDataSection(const headerType *mhdr, const char *sectname, 
                   size_t *outBytes, size_t *outCount)

@@ -64,7 +64,7 @@ void add_class_to_loadable_list(Class cls)
     IMP method;
 
     loadMethodLock.assertLocked();
-
+    // 获取load方法
     method = cls->getLoadMethod();
     if (!method) return;  // Don't bother if cls has no +load method
     
@@ -73,6 +73,7 @@ void add_class_to_loadable_list(Class cls)
                      cls->nameForLogging());
     }
     
+    // 当已使用的和分配的一样多时,就扩容列表
     if (loadable_classes_used == loadable_classes_allocated) {
         loadable_classes_allocated = loadable_classes_allocated*2 + 16;
         loadable_classes = (struct loadable_class *)
@@ -80,7 +81,7 @@ void add_class_to_loadable_list(Class cls)
                               loadable_classes_allocated *
                               sizeof(struct loadable_class));
     }
-    
+    // 将类信息加入到列表里
     loadable_classes[loadable_classes_used].cls = cls;
     loadable_classes[loadable_classes_used].method = method;
     loadable_classes_used++;
@@ -99,6 +100,7 @@ void add_category_to_loadable_list(Category cat)
 
     loadMethodLock.assertLocked();
 
+    // 获取load方法的实现
     method = _category_getLoadMethod(cat);
 
     // Don't bother if cat has no +load method
@@ -109,6 +111,7 @@ void add_category_to_loadable_list(Category cat)
                      _category_getClassName(cat), _category_getName(cat));
     }
     
+    // 当已使用的和分配的一样多时,就扩容列表
     if (loadable_categories_used == loadable_categories_allocated) {
         loadable_categories_allocated = loadable_categories_allocated*2 + 16;
         loadable_categories = (struct loadable_category *)
@@ -117,6 +120,7 @@ void add_category_to_loadable_list(Category cat)
                               sizeof(struct loadable_category));
     }
 
+    // 分类信息和load方法加入到分类load列表
     loadable_categories[loadable_categories_used].cat = cat;
     loadable_categories[loadable_categories_used].method = method;
     loadable_categories_used++;
